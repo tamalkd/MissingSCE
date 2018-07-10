@@ -38,6 +38,8 @@ strt <- Sys.time()
 source("RT.R")
 source("power_calc.R")
 
+set.seed(1000)
+
 #######################
 
 output <- numeric()

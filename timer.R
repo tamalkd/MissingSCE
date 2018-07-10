@@ -65,6 +65,8 @@ for (i in 1:length(designs))
               #cl <- makeCluster(cores - 2)
               #registerDoParallel(cl) 
               
+              set.seed(1000)
+              
               output <- foreach(it=1:replications, .inorder=FALSE, .combine='c') %do%
               {
                 result <- Calculate_conditional_power_random(
@@ -113,6 +115,8 @@ for (i in 1:length(designs))
               {
                 #cl <- makeCluster(cores-2)
                 #registerDoParallel(cl) 
+                
+                set.seed(1000)
                 
                 output <- foreach(it=1:replications, .inorder=FALSE, .combine='c') %do%
                 {
