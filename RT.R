@@ -1,3 +1,8 @@
+#########################
+# This R file only contains some library functions.
+# For running the simulations on a personal computer, please refer to 'test.R'.
+#########################
+
 library(imputeTS)
 library(data.table)
 library(mice)

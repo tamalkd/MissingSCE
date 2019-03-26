@@ -1,3 +1,8 @@
+#########################
+# This code is only intended for executing the simulation on supercomputers.
+# For running the simulations on a personal computer, please refer to 'test.R'.
+#########################
+
 args <- commandArgs(TRUE)
 
 print(args)
@@ -18,10 +23,10 @@ AR=0.6
 limit_phase=3
 reps_MBD=4
 num_MI=10
-replications=100000
 number=1
 number_MC=1000
 alfa=0.05
+replications=100000
 
 #######################
 

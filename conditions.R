@@ -1,6 +1,8 @@
-#####################
-### Design matrix ###
-#####################
+#########################
+# This code is only intended for generating the simulation conditions for 
+# running the simulations on supercomputers.
+# For running the simulations on a personal computer, please refer to 'test.R'.
+#########################
 
 designs <- c("MBD", "RBD", "ABAB")
 models <- c("AR1", "normal", "uniform")
