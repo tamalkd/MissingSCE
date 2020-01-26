@@ -9,6 +9,8 @@ library(mice)
 library(Rcpp)
 sourceCpp("NAP.cpp")
 
+### Calculate mean difference test statistic
+
 mean_diff <- function(scores.a, scores.b, method, direction)
 {
   if(method == "marker" || method == "TS")
@@ -20,15 +22,11 @@ mean_diff <- function(scores.a, scores.b, method, direction)
       return(Inf)
   }
   
-  # if (direction == "+")
-  #   result <- abs(mean(scores.b) - mean(scores.a)) 
-  # 
-  # if (direction == "-")
-  #   result <- abs(mean(scores.a) - mean(scores.b)) 
-  
   result <- abs(mean(scores.b) - mean(scores.a)) 
   return(result)
 }
+
+### Calculate NAP
 
 NAP_calculation <- function(scores.a, scores.b, method, direction)
 {
@@ -41,35 +39,10 @@ NAP_calculation <- function(scores.a, scores.b, method, direction)
       return(Inf)
   }
   
+  ### Use C++ function for fast comparisons
   NAP.observed <- NAP_cpp(scores.a, scores.b)
 
-  # no_overlap = 0
-  # comparisons = length(scores.a)*length(scores.b)
-  # 
-  # for (j in 1:length(scores.a))
-  # {
-  #   for (k in 1:length(scores.b))
-  #   {
-  #     if (scores.a[j] < scores.b[k])
-  #     {
-  #       no_overlap = no_overlap + 1
-  #     }
-  #     
-  #     if (scores.a[j] == scores.b[k])
-  #     {
-  #       no_overlap = no_overlap + 0.5
-  #     }
-  #   }
-  # }
-  # 
-  # NAP.observed <- no_overlap/comparisons
-  
-  # if (direction == "-")
-  # {
-  #   NAP.observed <- 1 - NAP.observed
-  # }
-  
-  # make NAP symmetric
+  ### Make NAP symmetric
   if (NAP.observed < 0.5) 
   {
     NAP.observed <- 1 - NAP.observed
@@ -77,6 +50,8 @@ NAP_calculation <- function(scores.a, scores.b, method, direction)
   
   return(NAP.observed)
 }
+
+### Calculate test statistic (either MD or NAP)
 
 ESM_calc <- function(ESM, scores.a, scores.b, method, direction)
 {
@@ -95,6 +70,9 @@ ESM_calc <- function(ESM, scores.a, scores.b, method, direction)
   return(stat)
 }
 
+### Impute missing data using time series method
+### Return data with missing data in place if model fitting fails
+
 TS_handler <- function(data, num_reps)
 {
   for(i in 1:num_reps)
@@ -112,6 +90,8 @@ TS_handler <- function(data, num_reps)
   return(data)
 }
 
+### Generate multiple imputations from dataset
+
 MI_handler <- function(data, num_MI)
 {
   data <- data[,1:2]
@@ -124,23 +104,47 @@ MI_handler <- function(data, num_MI)
   return(mi)
 }
 
-ESM.random.RT <- function(data, design, number, ESM, method, limit_phase, reps_MBD, num_MI, direction, alfa, ABAB_idx)
+### Perform randomization test and calculate p-value
+
+ESM.random.RT <- function(
+  data,        # Simulated dataset
+  design,      # SCE design type
+  number,      # Number of randomizations in Monte Carlo randomization test
+  ESM,         # Test statistic
+  method,      # Missing data handling method
+  limit_phase, # Minimum number of measurements in a phase
+  reps_MBD,    # Number of participants in MBD
+  num_MI,      # Number of imputations in multiple imputation
+  direction,   # Direction of test statistic (Only used if randomization test is one-sided)
+  alfa,        # Level of significance
+  ABAB_idx     # Phase change indices for all possible ABAB randomizations
+)
 { 
+  ### Impute missing data using time series method
+  
   if(method == "TS")
   {
     data <- TS_handler(data = data, num_reps = (if(design == "MBD") reps_MBD else 1)) 
   }
   
+  ### Randomization test for RBD
+  
   if (design == "RBD") 
   { 
+    ### Calulate observed test statistic
+    
     if(method == "MI")
     {
+      ### Generate multiple imputations
+      
       mi <- MI_handler(data, num_MI)
       index.a <- data[, 1] == "A"
       index.b <- data[, 1] == "B"
       
       completes <- matrix(nrow = nrow(data), ncol = num_MI)
       imps <- numeric(num_MI)
+      
+      ### Calculate average statistic from multiple imputations
       
       for(i in 1:num_MI)
       {
@@ -155,6 +159,8 @@ ESM.random.RT <- function(data, design, number, ESM, method, limit_phase, reps_M
       
     } else
     {
+      ### Calulate observed test statistic for complete data, randomized marker method, or time series method
+      
       observed.a <- data[, 2][data[, 1] == "A"]
       observed.b <- data[, 2][data[, 1] == "B"]
       
@@ -164,7 +170,8 @@ ESM.random.RT <- function(data, design, number, ESM, method, limit_phase, reps_M
     if(is.infinite(ESM_obs))
       stop("Observed test statistic invalid")
     
-    # generate randomizations
+    ### Generate Monte Carlo randomizations and calculate statistic for each randomization
+    
     observed <- data[, 2]
     MT <- length(observed)
     RD <- numeric(number)
@@ -176,6 +183,8 @@ ESM.random.RT <- function(data, design, number, ESM, method, limit_phase, reps_M
       assignment <- character(MT) 
       rand <- runif(MT/2)
       
+      ### Randomly generate a Monte Carlo randomization
+      
       for(j in 1:(MT/2))
       {
         index <- if(rand[j] < 0.5) ab else ba
@@ -184,6 +193,8 @@ ESM.random.RT <- function(data, design, number, ESM, method, limit_phase, reps_M
       
       if(method == "MI")
       {
+        ### Calculate average statistic from multiple imputations
+        
         index.a <- assignment == "A"
         index.b <- assignment == "B"
         
@@ -199,6 +210,8 @@ ESM.random.RT <- function(data, design, number, ESM, method, limit_phase, reps_M
         
       } else
       {
+        ### Calulate statistic for complete data, randomized marker method, or time series method
+        
         ascores <- observed[assignment == "A"] 
         bscores <- observed[assignment == "B"]
         
@@ -207,19 +220,28 @@ ESM.random.RT <- function(data, design, number, ESM, method, limit_phase, reps_M
       
     }
     
+    ### Add observed statistic to Monte Carlo distribution
     RD[number] <- ESM_obs
   }
   
+  ### Randomization test for ABAB
+  
   if(design == "ABAB")
   {
+    ### Calulate observed test statistic
+    
     if(method == "MI")
     {
+      ### Generate multiple imputations
+      
       mi <- MI_handler(data, num_MI)
       index.a <- data[, 1] == "A"
       index.b <- data[, 1] == "B"
       
       completes <- matrix(nrow = nrow(data), ncol = num_MI)
       imps <- numeric(num_MI)
+      
+      ### Calculate average statistic from multiple imputations
       
       for(i in 1:num_MI)
       {
@@ -234,6 +256,8 @@ ESM.random.RT <- function(data, design, number, ESM, method, limit_phase, reps_M
       
     } else
     {
+      ### Calulate observed test statistic for complete data, randomized marker method, or time series method
+      
       observed.a <- data[, 2][data[, 1] == "A"]
       observed.b <- data[, 2][data[, 1] == "B"]
       
@@ -243,15 +267,20 @@ ESM.random.RT <- function(data, design, number, ESM, method, limit_phase, reps_M
     if(is.infinite(ESM_obs))
       stop("Observed test statistic invalid")
     
-    # generate randomizations
+    ### Generate Monte Carlo randomizations 
+    
     RD <- numeric(number)
     observed <- data[, 2]
     MT <- length(observed)
     
+    ### Check if list of all possible ABAB randomizations has been passed down from power calculation function
+    ### If yes, use that list and randomly select Monte Carlo randomizations
+    ### If not, calculate list of all possible randomizations and randomly select Monte Carlo randomizations
+    
     if(ncol(ABAB_idx) == 3)
     {
       quantity <- nrow(ABAB_idx)
-      selection <- sample(1:quantity,number-1,replace=TRUE)
+      selection <- sample(1:quantity,number-1,replace=TRUE) # Randomly select Monte Carlo randomizations
       
       index.a1 <- ABAB_idx[,1]
       index.b1 <- ABAB_idx[,2]
@@ -259,7 +288,7 @@ ESM.random.RT <- function(data, design, number, ESM, method, limit_phase, reps_M
     } else
     {
       quantity<-choose(MT-4*limit_phase+3,3)
-      selection<-sample(1:quantity,number-1,replace=TRUE)
+      selection<-sample(1:quantity,number-1,replace=TRUE) # Randomly select Monte Carlo randomizations
       index1<-1:(MT-4*limit_phase+1)
       index2<-rev(cumsum(index1))
       
@@ -285,10 +314,14 @@ ESM.random.RT <- function(data, design, number, ESM, method, limit_phase, reps_M
       }
     }
     
+    ### Calculate statistic for each randomization
+    
     for(it in 1:(number-1))
     {
       if(method == "MI")
       {
+        ### Calculate average statistic from multiple imputations
+        
         index.a <- c(1:(index.a1[selection[it]]), (1+index.b1[selection[it]]):index.a2[selection[it]])
         index.b <- c((1+index.a1[selection[it]]):index.b1[selection[it]], (1+index.a2[selection[it]]):MT)
         
@@ -304,6 +337,8 @@ ESM.random.RT <- function(data, design, number, ESM, method, limit_phase, reps_M
         
       } else
       {
+        ### Calulate statistic for complete data, randomized marker method, or time series method
+        
         ascores <- c(observed[1:(index.a1[selection[it]])], observed[(1+index.b1[selection[it]]):index.a2[selection[it]]])
         bscores <- c(observed[(1+index.a1[selection[it]]):index.b1[selection[it]]], observed[(1+index.a2[selection[it]]):MT])
         
@@ -311,8 +346,11 @@ ESM.random.RT <- function(data, design, number, ESM, method, limit_phase, reps_M
       }
     }
     
+    ### Add observed statistic to Monte Carlo distribution
     RD[number] <- ESM_obs
   }
+  
+  ### Randomization test for MBD
   
   if(design == "MBD")
   {
@@ -320,17 +358,25 @@ ESM.random.RT <- function(data, design, number, ESM, method, limit_phase, reps_M
     MT<-nrow(data)
     diff<-numeric(N)
     
+    ### Calulate observed test statistic
+    
     if(method == "MI")
     {
+      ### Impute data for each participant separately
+      
       completes <- list()
       for(it in 1:N)
       {
+        ### Generate multiple imputations
+        
         mi <- MI_handler(data[,(it*2-1):(it*2)], num_MI)
         index.a <- data[, (it*2-1)] == "A"
         index.b <- data[, (it*2-1)] == "B"
         
         completes[[it]] <- matrix(nrow = nrow(data), ncol = num_MI)
         imps <- numeric(num_MI)
+        
+        ### Calculate average statistic from multiple imputations
         
         for(i in 1:num_MI)
         {
@@ -346,6 +392,8 @@ ESM.random.RT <- function(data, design, number, ESM, method, limit_phase, reps_M
       
     } else
     {
+      ### Calulate observed test statistic for complete data, randomized marker method, or time series method
+      
       for(it in 1:N)
       {
         observed.a<-data[,it*2][data[,(it*2)-1]=="A"]
@@ -355,6 +403,7 @@ ESM.random.RT <- function(data, design, number, ESM, method, limit_phase, reps_M
       }
     }
     
+    ### Calculate average test statistic from multiple participants
     ESM_obs <- mean(diff[is.finite(diff)])
     
     if(is.nan(ESM_obs))
@@ -363,13 +412,17 @@ ESM.random.RT <- function(data, design, number, ESM, method, limit_phase, reps_M
     startpoints <- (limit_phase + 1):(MT - limit_phase + 1)
     RD <- numeric(number)
     
+    ### Generate Monte Carlo randomizations and calculate statistic for each randomization
+    
     for(i in 1:(number-1))
     {
-      combstartpts <- sample(startpoints, N)
+      combstartpts <- sample(startpoints, N) # Randomly select start points for each participant
       diff<-numeric(N)
       
       if(method == "MI")
       {
+        ### Calculate average statistic from multiple imputations for each participant
+        
         for(it in 1:N)
         {
           index.a <- 1:(combstartpts[it]-1)
@@ -388,6 +441,8 @@ ESM.random.RT <- function(data, design, number, ESM, method, limit_phase, reps_M
         
       } else
       {
+        ### Calulate statistic for each participant (for complete data, randomized marker method, or time series method)
+        
         for(it in 1:N)
         {
           scores.a <- data[1:(combstartpts[it]-1), it*2]
@@ -397,14 +452,18 @@ ESM.random.RT <- function(data, design, number, ESM, method, limit_phase, reps_M
         }
       }
       
+      ### Calculate average statistic from multiple participants
       RD[i] <- mean(diff[is.finite(diff)])
       
       if(is.nan(RD[i]))
         RD[i] <- Inf
     }
     
+    ### Add observed statistic to Monte Carlo distribution
     RD[number] <- ESM_obs
   }
+  
+  ### Calculate p-value from randomization distribution and determine if H0 can be rejected
   
   test <- RD >= ESM_obs
   pvalue <- sum(test) / number  

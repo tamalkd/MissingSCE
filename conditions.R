@@ -4,15 +4,17 @@
 # For running the simulations on a personal computer, please refer to 'test.R'.
 #########################
 
-designs <- c("MBD", "RBD", "ABAB")
-models <- c("AR1", "normal", "uniform")
-ESMs <- c("MD", "NAP")
-ESs <- c(0, 1, 2)
-Ns <- c(40, 30, 20)
-methods <- c("full", "marker", "TS", "MI")
-missings <- c(0.1, 0.3, 0.5)
+### All simulation conditions
 
-#######################
+designs <- c("MBD", "RBD", "ABAB")          # SCE design types
+models <- c("AR1", "normal", "uniform")     # Data models
+ESMs <- c("MD", "NAP")                      # Test statistics
+ESs <- c(0, 1, 2)                           # Effect sizes
+Ns <- c(40, 30, 20)                         # Number of measurements
+methods <- c("full", "marker", "TS", "MI")  # Missing data handling methods
+missings <- c(0.1, 0.3, 0.5)                # Proportion of missing data 
+
+### Generate all possible combinations of simulation conditions
 
 outfile <- "start.csv"
 
@@ -75,6 +77,8 @@ for (i in 1:length(designs))
     }
   }
 }
+
+### Publish table containing all possible combinations
 
 print(Result_table)
 write.csv(Result_table, outfile, row.names = FALSE)

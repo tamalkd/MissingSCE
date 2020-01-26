@@ -21,6 +21,8 @@
 # 'foreach' 'parallel' 'doParallel' 'imputeTS' 'data.table' 'mice' 'Rcpp' 
 #####################
 
+### All simulation conditions (for reference)
+
 # designs <- c("MBD", "RBD", "ABAB")
 # models <- c("AR1", "normal", "uniform")
 # ESMs <- c("MD", "NAP")
@@ -29,30 +31,34 @@
 # methods <- c("full", "marker", "TS", "MI")
 # missings <- c(0.1, 0.3, 0.5)
 
-designs <- c("RBD", "ABAB")
-models <- c("normal")
-ESMs <- c("NAP")
-ESs <- c(1)
-Ns <- c(30)
-methods <- c("marker")
-missings <- c(0.3)
+### Simulation conditions to test
 
-#####################
+designs <- c("RBD", "ABAB") # SCE design types
+models <- c("normal")       # Data models
+ESMs <- c("NAP")            # Test statistics
+ESs <- c(1)                 # Effect sizes
+Ns <- c(30)                 # Number of measurements
+methods <- c("marker")      # Missing data handling methods
+missings <- c(0.3)          # Proportion of missing data 
 
-AR = 0.6
-limit_phase = 3
-reps_MBD = 4
-num_MI = 10
-number = 1
-number_MC = 1000
-alfa = 0.05
-replications = 100000
+### Other parameters
 
-######################
+AR = 0.6                    # Autocorrelation
+limit_phase = 3             # Minimum number of measurements in a phase
+reps_MBD = 4                # Number of participants in MBD
+num_MI = 10                 # Number of imputations in multiple imputation
+number = 1                  # Number of randomizations per simulated dataset (>1 only if calcualting conditional power)
+number_MC = 1000            # Number of randomizations in Monte Carlo randomization test
+alfa = 0.05                 # Level of significance
+replications = 1000         # Number of simulated datasets
+direction = "+"             # Direction of test statistic (Only used if randomization test is one-sided)
+
+### Run simulations
 
 library(foreach)
 library(parallel)
 library(doParallel)
+library(Rcpp)
 
 cores <- detectCores()
 print(cores)
@@ -90,14 +96,23 @@ for (i in 1:length(designs))
           {
             if(methods[n]=="full")
             {
+              ### Run simulation with full datasets (no missing data)
+              
               cl <- makeCluster(max(cores - 2, 1))
               registerDoParallel(cl) 
               
               start <- Sys.time()
-              set.seed(1000)
               
-              output <- foreach(it=1:replications, .inorder=FALSE, .combine='c') %dopar%
+              output <- foreach(
+                it = 1:replications, 
+                .inorder = FALSE, 
+                .combine = 'c', 
+                .packages = c("Rcpp"), 
+                .noexport = c("NAP_cpp")
+              ) %dopar%
               {
+                sourceCpp("NAP.cpp") # Explicitly source C++ script inside loop to satisfy foreach
+                
                 result <- Calculate_conditional_power_random(
                   design=designs[i], 
                   model=models[j], 
@@ -106,7 +121,7 @@ for (i in 1:length(designs))
                   limit_phase=limit_phase,
                   reps_MBD=reps_MBD,
                   num_MI=num_MI,
-                  direction="+", 
+                  direction=direction, 
                   alfa=alfa, 
                   N=Ns[m], 
                   ES=ESs[l], 
@@ -141,14 +156,23 @@ for (i in 1:length(designs))
             {
               for(o in 1:length(missings))
               {
+                ### Run simulation with missing data
+                
                 cl <- makeCluster(max(cores - 2, 1))
                 registerDoParallel(cl)
                 
                 start <- Sys.time()
-                set.seed(1000)
                 
-                output <- foreach(it=1:replications, .inorder=FALSE, .combine='c') %dopar%
+                output <- foreach(
+                  it = 1:replications, 
+                  .inorder = FALSE, 
+                  .combine = 'c', 
+                  .packages = c("Rcpp"), 
+                  .noexport = c("NAP_cpp")
+                ) %dopar%
                 {
+                  sourceCpp("NAP.cpp") # Explicitly source C++ script inside loop to satisfy foreach
+                  
                   result <- Calculate_conditional_power_random(
                     design=designs[i], 
                     model=models[j], 
@@ -157,7 +181,7 @@ for (i in 1:length(designs))
                     limit_phase=limit_phase, 
                     reps_MBD=reps_MBD,
                     num_MI=num_MI,
-                    direction="+", 
+                    direction=direction, 
                     alfa=alfa, 
                     N=Ns[m], 
                     ES=ESs[l], 
@@ -197,6 +221,8 @@ for (i in 1:length(designs))
     }
   }
 }
+
+### Publish results
 
 print(Result_table)
 write.table(Result_table, "Results", append = TRUE, row.names = FALSE, col.names = FALSE)
